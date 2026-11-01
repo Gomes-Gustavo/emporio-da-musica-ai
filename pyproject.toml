@@ -1,0 +1,6 @@
+[project]
+name = "emporio-da-musica-ai"
+version = "0.1.0"
+description = "Customer service agent for the fictional store Empório da Música"
+requires-python = ">=3.12"
+dependencies = []
