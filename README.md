@@ -35,7 +35,8 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 ## Known limitations
 
 - **Search matches whole words, not similar spellings.** A query has to appear in the product's name, description or category, ignoring accents and case. A typo such as "yamha" returns nothing.
+- **Order lookup is not real authentication.** Whoever knows a customer's e-mail or phone number can read that customer's orders. The tool answers the same way for an order that does not exist and one that belongs to someone else. A production version would verify the customer through the WhatsApp number of the conversation or a one-time code.
 
 ## Status
 
-Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`). Order and policy tools and the agent itself are not implemented yet.
+Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) and the order tool (`get_customer_orders`). The policy tool and the agent itself are not implemented yet.

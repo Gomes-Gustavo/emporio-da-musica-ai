@@ -1,13 +1,33 @@
 """Tools the agent can call. They return plain dicts, so the model reads exactly what the store system says."""
 
 import unicodedata
+from datetime import date
 
-from emporio.data import Product, Promotion, Store, load_store
+from emporio.data import Order, Product, Promotion, Store, load_store
 
 PIX_DISCOUNT_PERCENT = 5
 MAX_RESULTS = 10
 MAX_ALTERNATIVES = 3
 STATUS_LABELS = {"discontinued": "descontinuado", "coming_soon": "em breve"}
+ORDER_STATUS = {
+    "pending": "pendente",
+    "confirmed": "confirmado",
+    "shipped": "enviado",
+    "delivered": "entregue",
+    "cancelled": "cancelado",
+}
+PAYMENT_METHODS = {
+    "pix": "PIX",
+    "debit": "cartão de débito",
+    "boleto": "boleto",
+    "credit_3x": "cartão de crédito em 3x",
+    "credit_6x": "cartão de crédito em 6x",
+    "credit_12x": "cartão de crédito em 12x",
+}
+
+
+def _today() -> date:
+    return date.today()  # a function, so tests can fix the date
 
 
 def _norm(text: str) -> str:
@@ -141,3 +161,70 @@ def get_product(name_or_id: str) -> dict:
     if len(found) > 1:
         return {"error": "ambiguous name", "matches": [_summary(store, p) for p in found[:MAX_RESULTS]]}
     return _detail(store, found[0])
+
+
+def _digits(text: str) -> str:
+    return "".join(c for c in text if c.isdigit())
+
+
+def _customers_matching(store: Store, contact: str) -> list:
+    contact = contact.strip()
+    if "@" in contact:
+        return [c for c in store.customers.values() if c.email.lower() == contact.lower()]
+    # the last 11 digits (area code + number) ignore formatting and a "+55" prefix
+    phone = _digits(contact)[-11:]
+    return [c for c in store.customers.values() if phone and _digits(c.phone)[-11:] == phone]
+
+
+def _order_view(store: Store, order: Order, today: date) -> dict:
+    return {
+        "order_id": order.order_id,
+        "order_date": order.order_date.isoformat(),
+        "status": ORDER_STATUS.get(order.status, order.status),
+        "total_brl": order.total_brl,
+        "payment_method": PAYMENT_METHODS.get(order.payment_method, order.payment_method),
+        "items": [{"product": store.products[i.product_id].name, "quantity": i.quantity} for i in order.items],
+        "tracking_code": order.tracking_code,
+        "estimated_delivery": order.estimated_delivery.isoformat() if order.estimated_delivery else None,
+        # days since the estimated delivery date: positive means the date has passed
+        "days_since_estimated_delivery": (today - order.estimated_delivery).days if order.estimated_delivery else None,
+        "notes": order.notes,
+    }
+
+
+def get_customer_orders(email_or_phone: str, order_id: int | None = None) -> dict:
+    """Look up a customer's orders (status, tracking, delivery estimate, items, total).
+
+    Use it for order status and for returns. The customer must give the e-mail or phone number of their
+    registration, and only their own orders are returned. If the e-mail is shared by more than one customer,
+    the result asks for the phone number.
+
+    Args:
+        email_or_phone: The customer's e-mail or phone number, in any common format.
+        order_id: Only this order. Leave empty to list all the customer's orders, most recent first.
+
+    Returns:
+        The customer's name and their orders. days_since_estimated_delivery counts the days since the
+        estimated delivery date; for a delivered order it is the time since the customer received it.
+    """
+    store = load_store()
+    customers = _customers_matching(store, email_or_phone)
+    if not customers:
+        return {"error": "no customer found with this contact"}
+    if len(customers) > 1:
+        return {"error": "this e-mail belongs to more than one customer: ask for the phone number"}
+
+    customer = customers[0]
+    orders = sorted(
+        (o for o in store.orders.values() if o.customer_id == customer.customer_id),
+        key=lambda o: o.order_date,
+        reverse=True,
+    )
+    if order_id is not None:
+        orders = [o for o in orders if o.order_id == order_id]
+        if not orders:
+            # same answer for an order that does not exist and one that belongs to someone else
+            return {"error": "order not found for this customer"}
+
+    today = _today()
+    return {"customer": {"name": customer.name}, "orders": [_order_view(store, o, today) for o in orders]}
