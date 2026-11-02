@@ -32,6 +32,11 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 - **The receipt date of an order is assumed to be `estimated_delivery`,** since the data has no actual delivery date.
 - **`specs` stays a dictionary,** because its keys depend on the product category.
 
+## Policy manual inconsistencies
+
+- **Phone and WhatsApp.** Section 1.2 labels (67) 3341-4444 as "Telefone / WhatsApp", while section 7 names (67) 3321-4500 as the WhatsApp channel. The agent gives **(67) 3321-4500 as the WhatsApp** and **(67) 3341-4444 as the phone**.
+
+
 ## Known limitations
 
 - **Search matches whole words, not similar spellings.** A query has to appear in the product's name, description or category, ignoring accents and case. A typo such as "yamha" returns nothing.
@@ -39,4 +44,4 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 
 ## Status
 
-Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) and the order tool (`get_customer_orders`). The policy tool and the agent itself are not implemented yet.
+Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) the order tool (`get_customer_orders`) and the policy tool (`get_policy`), which serves one section of the store manual at a time (`src/emporio/policies.py` splits the PDF). The agent itself is not implemented yet.

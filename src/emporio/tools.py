@@ -2,8 +2,10 @@
 
 import unicodedata
 from datetime import date
+from typing import Literal
 
 from emporio.data import Order, Product, Promotion, Store, load_store
+from emporio.policies import HEADINGS, load_policies
 
 PIX_DISCOUNT_PERCENT = 5
 MAX_RESULTS = 10
@@ -24,6 +26,11 @@ PAYMENT_METHODS = {
     "credit_6x": "cartão de crédito em 6x",
     "credit_12x": "cartão de crédito em 12x",
 }
+
+
+# The service guidelines (section 7) go into the system prompt and the final provisions (10) are internal.
+PolicyTopic = Literal["about", "hours", "payment", "returns", "shipping", "promotions", "warranty", "privacy"]
+POLICY_TOPICS = PolicyTopic.__args__
 
 
 def _today() -> date:
@@ -228,3 +235,24 @@ def get_customer_orders(email_or_phone: str, order_id: int | None = None) -> dic
 
     today = _today()
     return {"customer": {"name": customer.name}, "orders": [_order_view(store, o, today) for o in orders]}
+
+
+def get_policy(topic: PolicyTopic) -> dict:
+    """Read one section of the store policy manual. Use it for rules, never answer them from memory.
+
+    Topics:
+        about: who the store is, address, phone, e-mail (use it for "qual o endereço?").
+        hours: opening hours, on weekdays, Saturday, Sunday and holidays.
+        payment: payment methods, PIX discount, installment rules.
+        returns: regret right, exchange for defect, exchange for preference, items that cannot be exchanged.
+        shipping: delivery in Campo Grande and to other cities, shipping fees and times, tracking codes.
+        promotions: types of promotion and their rules (they do not stack).
+        warranty: legal and manufacturer warranty, and what it does not cover.
+        privacy: how customer data is used (LGPD).
+
+    Returns:
+        The section title and its text, exactly as written in the manual.
+    """
+    if topic not in POLICY_TOPICS:
+        return {"error": "unknown topic", "valid_topics": list(POLICY_TOPICS)}
+    return {"section": HEADINGS[topic], "text": load_policies()[topic]}
