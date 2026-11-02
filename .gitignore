@@ -12,6 +12,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
 
 # Local copy of the challenge brief.
 desafio_tecnico_ai_eng_artefact.pdf

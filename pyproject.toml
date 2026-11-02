@@ -4,3 +4,9 @@ version = "0.1.0"
 description = "Customer service agent for the fictional store Empório da Música"
 requires-python = ">=3.12"
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "pandas>=3.1.0",
+]
