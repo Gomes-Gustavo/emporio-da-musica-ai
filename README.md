@@ -42,6 +42,10 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 - **Search matches whole words, not similar spellings.** A query has to appear in the product's name, description or category, ignoring accents and case. A typo such as "yamha" returns nothing.
 - **Order lookup is not real authentication.** Whoever knows a customer's e-mail or phone number can read that customer's orders. The tool answers the same way for an order that does not exist and one that belongs to someone else. A production version would verify the customer through the WhatsApp number of the conversation or a one-time code.
 
+## Next steps
+
+- **Hand-off to a human.** The agent cannot register a complaint or forward a case (manual 7.3 asks for both), so it gives the store's contact channels instead and never says it forwarded anything. A production version needs a tool that opens a ticket for the team, which answers within 24 business hours.
+
 ## Status
 
-Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) the order tool (`get_customer_orders`) and the policy tool (`get_policy`), which serves one section of the store manual at a time (`src/emporio/policies.py` splits the PDF). The agent itself is not implemented yet.
+Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) the order tool (`get_customer_orders`) and the policy tool (`get_policy`), which serves one section of the store manual at a time (`src/emporio/policies.py` splits the PDF). `src/emporio/agent.py` gives these tools and the service persona to Gemini (`gemini-3.5-flash-lite` by default, or the model named in `GEMINI_MODEL`), which decides by itself when to call them. Put `GEMINI_API_KEY` in a `.env` file (it is gitignored) and ask one question with `uv run python -m emporio.agent "Quais violões tem até R$ 1000?"`. The command-line chat is not implemented yet.

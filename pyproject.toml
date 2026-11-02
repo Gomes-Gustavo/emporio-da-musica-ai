@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Customer service agent for the fictional store Empório da Música"
 requires-python = ">=3.12"
 dependencies = [
+    "google-genai>=2.34.0",
     "pypdf>=6.21.4",
+    "python-dotenv>=1.2.4",
 ]
 
 [build-system]
