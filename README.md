@@ -16,6 +16,22 @@ uv sync
 
 `uv sync` creates `.venv` and installs the packages pinned in `uv.lock`. Add a library with `uv add <package>`.
 
+Run the tests with `uv run pytest`.
+
+## Data assumptions
+
+The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/01_data_audit.ipynb). Each finding there ends in a decision, and `src/emporio/data.py` and the agent's tools follow them:
+
+- **The CSVs are the source of truth.** Three categories (woodwinds, brass, orchestral strings) have no products, so the agent never offers items that are not in the data.
+- **A product is available only when it is `active` and has stock.** Status wins over stock.
+- **Only promotions with `is_active = 1` apply.** The 5% PIX discount does not stack on a promotional price (manual 6.2). An ended promotion is reported as ended, with the current price.
+- **`total_brl` is the recorded order total.** It is never recomputed from current prices.
+- **A missing tracking code means the order has not shipped yet.** Cancelled orders carry the reason in `notes`.
+- **An e-mail alone does not identify a customer.** Two customer records share one, so the agent asks for the phone number when an e-mail is ambiguous.
+- **The reference date is the real current date,** because a customer service agent answers on the day the customer writes. Day counts are computed in code, never by the model. Order status is reported as recorded.
+- **The receipt date of an order is assumed to be `estimated_delivery`,** since the data has no actual delivery date.
+- **`specs` stays a dictionary,** because its keys depend on the product category.
+
 ## Status
 
-Repository initialized with the store data. The agent is not implemented yet.
+Data loading is done: `src/emporio/data.py` turns the CSVs into typed records. The agent's tools are not implemented yet.
