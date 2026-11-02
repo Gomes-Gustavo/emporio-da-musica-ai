@@ -24,7 +24,7 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 
 - **The CSVs are the source of truth.** Three categories (woodwinds, brass, orchestral strings) have no products, so the agent never offers items that are not in the data.
 - **A product is available only when it is `active` and has stock.** Status wins over stock.
-- **Only promotions with `is_active = 1` apply.** The 5% PIX discount does not stack on a promotional price (manual 6.2). An ended promotion is reported as ended, with the current price.
+- **Only promotions with `is_active = 1` apply.** No product has two active promotions, so there is no tie-break; some products do have two inactive ones. The 5% PIX discount does not stack on a promotional price (manual 6.2). An ended promotion is reported as ended, with the current price.
 - **`total_brl` is the recorded order total.** It is never recomputed from current prices.
 - **A missing tracking code means the order has not shipped yet.** Cancelled orders carry the reason in `notes`.
 - **An e-mail alone does not identify a customer.** Two customer records share one, so the agent asks for the phone number when an e-mail is ambiguous.
@@ -32,6 +32,10 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 - **The receipt date of an order is assumed to be `estimated_delivery`,** since the data has no actual delivery date.
 - **`specs` stays a dictionary,** because its keys depend on the product category.
 
+## Known limitations
+
+- **Search matches whole words, not similar spellings.** A query has to appear in the product's name, description or category, ignoring accents and case. A typo such as "yamha" returns nothing.
+
 ## Status
 
-Data loading is done: `src/emporio/data.py` turns the CSVs into typed records. The agent's tools are not implemented yet.
+Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`). Order and policy tools and the agent itself are not implemented yet.
