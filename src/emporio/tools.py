@@ -2,6 +2,7 @@
 
 import unicodedata
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 from emporio.data import Order, Product, Promotion, Store, load_store
@@ -56,13 +57,19 @@ def _promotions(store: Store, product: Product, active: bool) -> list[Promotion]
     return [p for p in store.promotions if p.product_id == product.product_id and p.is_active == active]
 
 
+def _discounted(price: float, percent: float) -> float:
+    """The price minus a percentage, rounded half up to the cent: float round() sends 408.405 down to 408.40."""
+    exact = Decimal(str(price)) * (100 - Decimal(str(percent))) / 100
+    return float(exact.quantize(Decimal("0.01"), ROUND_HALF_UP))
+
+
 def _pricing(store: Store, product: Product) -> dict:
     """Original price, discount and final price, always together (manual 6.2)."""
     # the audit found no product with two active promotions, so the first one is the only one
     promotion = next(iter(_promotions(store, product, active=True)), None)
     final = product.price_brl
     if promotion:
-        final = round(product.price_brl * (1 - promotion.discount_percent / 100), 2)
+        final = _discounted(product.price_brl, promotion.discount_percent)
     return {
         "list_price_brl": product.price_brl,
         "promotion": (
@@ -72,7 +79,7 @@ def _pricing(store: Store, product: Product) -> dict:
         ),
         "final_price_brl": final,
         # promotions do not stack: the PIX discount applies to the list price only
-        "pix_price_brl": None if promotion else round(product.price_brl * (1 - PIX_DISCOUNT_PERCENT / 100), 2),
+        "pix_price_brl": None if promotion else _discounted(product.price_brl, PIX_DISCOUNT_PERCENT),
     }
 
 

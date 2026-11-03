@@ -31,6 +31,26 @@ def test_active_promotion_lowers_the_price_and_removes_the_pix_discount():
     }
 
 
+def test_half_a_cent_rounds_up():
+    # 429.90 * 0.95 = 408.405: float round() gives 408.40, a shopper expects 408.41
+    assert get_product("tagima memphis")["price"]["pix_price_brl"] == 408.41
+
+
+def test_every_discount_in_the_catalog_rounds_half_up_to_the_cent():
+    # the oracle is integer arithmetic on cents, so it shares no code (and no float) with the tool
+    checked = 0
+    for product in load_store().products.values():
+        price = get_product(str(product.product_id))["price"]
+        cents = round(price["list_price_brl"] * 100)
+        if price["promotion"]:
+            expected = (cents * (100 - price["promotion"]["discount_percent"]) + 50) // 100
+            assert round(price["final_price_brl"] * 100) == expected, product.name
+        else:
+            assert round(price["pix_price_brl"] * 100) == (cents * 95 + 50) // 100, product.name
+        checked += 1
+    assert checked == 65
+
+
 @pytest.mark.parametrize(
     "product_id, availability",
     [
