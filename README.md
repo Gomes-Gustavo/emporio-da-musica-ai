@@ -43,6 +43,8 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 
 - **Order lookup is not real authentication.** Whoever knows a customer's e-mail or phone number can read that customer's orders. The tool answers the same way for an order that does not exist and one that belongs to someone else. A production version would verify the customer through the WhatsApp number of the conversation or a one-time code.
 
+- **The default model sometimes drops the space between two words** (for example "valoré" or "12xsem"). The conversations in [`examples/`](examples/) are real sessions, left exactly as the agent wrote them, so a few of these slips appear there. The default is `gemini-3.5-flash-lite` because it fits the free tier's daily request limit; a more robust model, chosen with `GEMINI_MODEL`, should handle this.
+
 ## Next steps
 
 - **Hand-off to a human.** The agent cannot register a complaint or forward a case (manual 7.3 asks for both), so it gives the store's contact channels instead and never says it forwarded anything. A production version needs a tool that opens a ticket for the team, which answers within 24 business hours.
