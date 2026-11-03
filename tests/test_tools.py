@@ -3,7 +3,7 @@
 import pytest
 
 from emporio.data import load_store
-from emporio.tools import get_product, search_products
+from emporio.tools import _installments, get_product, search_products
 
 
 def test_price_without_active_promotion_offers_the_pix_discount():
@@ -15,6 +15,7 @@ def test_price_without_active_promotion_offers_the_pix_discount():
         "promotion": None,
         "final_price_brl": 2199.0,
         "pix_price_brl": 2089.05,  # 5% off the list price
+        "credit_card_installments": {"max_installments": 12, "installment_brl": 183.25},
     }
     # the 12% offer ended: the agent must say so, not apply it
     assert takamine["ended_promotions"] == [{"description": "Oferta Especial", "discount_percent": 12}]
@@ -28,7 +29,40 @@ def test_active_promotion_lowers_the_price_and_removes_the_pix_discount():
         "promotion": {"description": "Desconto Exclusivo", "discount_percent": 18},
         "final_price_brl": 1967.18,
         "pix_price_brl": None,  # promotions do not stack (manual 6.2)
+        "credit_card_installments": {"max_installments": 12, "installment_brl": 163.93},
     }
+
+
+def test_installments_follow_the_promotional_price():
+    # Kalani KAL-700T: 359.00 with 10% off = 323.10. 4x is 80.775 (>= 80), 5x is 64.62 (< 80).
+    # The model used to answer "up to 10x" here; the manual's section 3.1 allows 4x.
+    assert get_product("127")["price"]["credit_card_installments"] == {
+        "max_installments": 4,
+        "installment_brl": 80.78,
+    }
+
+
+@pytest.mark.parametrize(
+    "price, installments, installment",
+    [
+        (49.99, 1, 49.99),  # no installment may be under R$ 50
+        (100.00, 2, 50.00),
+        (149.99, 2, 75.00),  # 3x would be 49.997
+        (150.00, 3, 50.00),
+        (319.99, 3, 106.66),  # 4x would be 79.9975, under the R$ 80 of the 4x-6x range
+        (320.00, 4, 80.00),
+        (400.00, 5, 80.00),
+        (480.00, 6, 80.00),
+        (699.99, 6, 116.67),  # 7x would be 99.9986, under the R$ 100 of the 7x-12x range
+        (700.00, 7, 100.00),
+        (1199.99, 11, 109.09),  # 12x would be 99.9992
+        (1200.00, 12, 100.00),
+        (11499.00, 12, 958.25),
+    ],
+)
+def test_installment_minimums_by_range(price, installments, installment):
+    # manual 3.1: up to 3x from R$ 50 per installment, 4x to 6x from R$ 80, 7x to 12x from R$ 100
+    assert _installments(price) == {"max_installments": installments, "installment_brl": installment}
 
 
 def test_half_a_cent_rounds_up():

@@ -30,6 +30,8 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 - **An e-mail alone does not identify a customer.** Two customer records share one, so the agent asks for the phone number when an e-mail is ambiguous.
 - **The reference date is the real current date,** because a customer service agent answers on the day the customer writes. Day counts are computed in code, never by the model. Order status is reported as recorded.
 - **The receipt date of an order is assumed to be `estimated_delivery`,** since the data has no actual delivery date.
+- **Installments are computed in code,** not by the model. Manual 3.1 is read as "no installment under R$ 50 up to 3x, under R$ 80 from 4x to 6x, under R$ 100 from 7x to 12x", and each product carries its maximum interest-free installments at its final price.
+- **Two return windows, two start dates.** The 7-day regret window counts from receipt (the estimated delivery date, see above) and the 30-day defect window counts from the purchase (manual 4.2), so orders carry both `days_since_estimated_delivery` and `days_since_order`.
 - **`specs` stays a dictionary,** because its keys depend on the product category.
 
 ## Policy manual inconsistencies
@@ -39,7 +41,6 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 
 ## Known limitations
 
-- **Search matches whole words, not similar spellings.** A query has to appear in the product's name, description or category, ignoring accents and case. A typo such as "yamha" returns nothing.
 - **Order lookup is not real authentication.** Whoever knows a customer's e-mail or phone number can read that customer's orders. The tool answers the same way for an order that does not exist and one that belongs to someone else. A production version would verify the customer through the WhatsApp number of the conversation or a one-time code.
 
 ## Next steps
@@ -48,4 +49,4 @@ The CSVs in `data/` were audited in [`notebooks/01_data_audit.ipynb`](notebooks/
 
 ## Status
 
-Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) the order tool (`get_customer_orders`) and the policy tool (`get_policy`), which serves one section of the store manual at a time (`src/emporio/policies.py` splits the PDF). `src/emporio/agent.py` gives these tools and the service persona to Gemini (`gemini-3.5-flash-lite` by default, or the model named in `GEMINI_MODEL`), which decides by itself when to call them. `src/emporio/cli.py` is the command-line chat: copy `.env.example` to `.env` (it is gitignored), put your `GEMINI_API_KEY` in it and run `uv run emporio`. The history lasts only while the program runs, each consultation the agent makes is printed as `[consulta] ...`, and `sair` ends the chat.
+Done: `src/emporio/data.py` turns the CSVs into typed records, and `src/emporio/tools.py` has the catalog tools (`search_products`, `get_product`) the order tool (`get_customer_orders`) and the policy tool (`get_policy`), which serves one section of the store manual at a time (`src/emporio/policies.py` splits the PDF). `src/emporio/agent.py` gives these tools and the service persona to Gemini (`gemini-3.5-flash-lite` by default, or the model named in `GEMINI_MODEL`), which decides by itself when to call them. `src/emporio/cli.py` is the command-line chat: copy `.env.example` to `.env` (it is gitignored), put your `GEMINI_API_KEY` in it and run `uv run emporio`. The history lasts only while the program runs, each consultation the agent makes is printed as `[consulta] ...`, and `sair` ends the chat. A failure (API error, no internet) does not end the conversation, and an empty answer is asked again once. `GEMINI_THINKING_LEVEL` (`low`, `medium`, `high`) is an optional setting for how much the model reasons before answering.

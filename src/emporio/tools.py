@@ -3,12 +3,14 @@
 import unicodedata
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
 
 from emporio.data import Order, Product, Promotion, Store, load_store
 from emporio.policies import HEADINGS, load_policies
 
 PIX_DISCOUNT_PERCENT = 5
+MAX_INSTALLMENTS = 12
+# Manual 3.1, read as "no installment under this value": up to 3x R$ 50, 4x to 6x R$ 80, 7x to 12x R$ 100.
+INSTALLMENT_MINIMUMS = [(3, 50), (6, 80), (12, 100)]  # (up to this many installments, smallest installment in BRL)
 MAX_RESULTS = 10
 MAX_ALTERNATIVES = 3
 STATUS_LABELS = {"discontinued": "descontinuado", "coming_soon": "em breve"}
@@ -30,8 +32,7 @@ PAYMENT_METHODS = {
 
 
 # The service guidelines (section 7) go into the system prompt and the final provisions (10) are internal.
-PolicyTopic = Literal["about", "hours", "payment", "returns", "shipping", "promotions", "warranty", "privacy"]
-POLICY_TOPICS = PolicyTopic.__args__
+POLICY_TOPICS = ("about", "hours", "payment", "returns", "shipping", "promotions", "warranty", "privacy")
 
 
 def _today() -> date:
@@ -57,10 +58,24 @@ def _promotions(store: Store, product: Product, active: bool) -> list[Promotion]
     return [p for p in store.promotions if p.product_id == product.product_id and p.is_active == active]
 
 
+def _cents(value: Decimal) -> float:
+    """Round half up to the cent: float round() sends 408.405 down to 408.40."""
+    return float(value.quantize(Decimal("0.01"), ROUND_HALF_UP))
+
+
 def _discounted(price: float, percent: float) -> float:
-    """The price minus a percentage, rounded half up to the cent: float round() sends 408.405 down to 408.40."""
-    exact = Decimal(str(price)) * (100 - Decimal(str(percent))) / 100
-    return float(exact.quantize(Decimal("0.01"), ROUND_HALF_UP))
+    return _cents(Decimal(str(price)) * (100 - Decimal(str(percent))) / 100)
+
+
+def _installments(price: float) -> dict:
+    """The most interest-free credit card installments the price allows (manual 3.1)."""
+    total = Decimal(str(price))
+    best = 1
+    for n in range(2, MAX_INSTALLMENTS + 1):
+        minimum = next(smallest for up_to, smallest in INSTALLMENT_MINIMUMS if n <= up_to)
+        if total / n >= minimum:
+            best = n  # a larger n only makes the installment smaller and the minimum bigger, so this is the last
+    return {"max_installments": best, "installment_brl": _cents(total / best)}
 
 
 def _pricing(store: Store, product: Product) -> dict:
@@ -80,6 +95,8 @@ def _pricing(store: Store, product: Product) -> dict:
         "final_price_brl": final,
         # promotions do not stack: the PIX discount applies to the list price only
         "pix_price_brl": None if promotion else _discounted(product.price_brl, PIX_DISCOUNT_PERCENT),
+        # the model cannot be trusted to divide: it once said "up to 10x" for a price the manual limits to 4x
+        "credit_card_installments": _installments(final),
     }
 
 
@@ -120,14 +137,14 @@ def _matches(store: Store, product: Product, query: str) -> bool:
 
 
 def search_products(
-    query: str = "", category: str = "", max_price: float | None = None, in_stock_only: bool = True
+    query: str = "", category: str = "", max_price: float = 0, in_stock_only: bool = True
 ) -> dict:
     """Search the catalog. Use it for options, prices and availability: never state them without calling it.
 
     Args:
         query: Words from the brand, model or description, e.g. "yamaha nylon". Empty matches everything.
         category: Category name, e.g. "Violões", "Guitarras", "Baixos", "Ukuleles". Empty means all categories.
-        max_price: Highest price the customer will pay, in BRL. It is compared with the promotional price.
+        max_price: Highest price the customer will pay, in BRL, compared with the promotional price. 0 means no limit.
         in_stock_only: When true (default) only products that can be bought now are listed.
 
     Returns:
@@ -148,7 +165,7 @@ def search_products(
         and (not in_stock_only or _is_available(product))
     ]
     results = sorted(
-        (summary for _, summary in found if max_price is None or summary["price"]["final_price_brl"] <= max_price),
+        (summary for _, summary in found if not max_price or summary["price"]["final_price_brl"] <= max_price),
         key=lambda summary: summary["price"]["final_price_brl"],
     )
     return {"total_matches": len(results), "products": results[:MAX_RESULTS]}
@@ -200,6 +217,7 @@ def _order_view(store: Store, order: Order, today: date) -> dict:
         "items": [{"product": store.products[i.product_id].name, "quantity": i.quantity} for i in order.items],
         "tracking_code": order.tracking_code,
         "estimated_delivery": order.estimated_delivery.isoformat() if order.estimated_delivery else None,
+        "days_since_order": (today - order.order_date).days,
         # days since the estimated delivery date: positive means the date has passed
         "days_since_estimated_delivery": (today - order.estimated_delivery).days if order.estimated_delivery else None,
         "notes": order.notes,
@@ -218,8 +236,10 @@ def get_customer_orders(email_or_phone: str, order_id: int | None = None) -> dic
         order_id: Only this order. Leave empty to list all the customer's orders, most recent first.
 
     Returns:
-        The customer's name and their orders. days_since_estimated_delivery counts the days since the
-        estimated delivery date; for a delivered order it is the time since the customer received it.
+        The customer's name and their orders. days_since_order counts the days since the purchase (the
+        defect exchange window runs from it). days_since_estimated_delivery counts the days since the
+        estimated delivery date; for a delivered order it is the time since the customer received it
+        (the 7-day regret window runs from it). The delivery date is only an estimate: there is no actual one.
     """
     store = load_store()
     customers = _customers_matching(store, email_or_phone)
@@ -244,7 +264,7 @@ def get_customer_orders(email_or_phone: str, order_id: int | None = None) -> dic
     return {"customer": {"name": customer.name}, "orders": [_order_view(store, o, today) for o in orders]}
 
 
-def get_policy(topic: PolicyTopic) -> dict:
+def get_policy(topic: str) -> dict:
     """Read one section of the store policy manual. Use it for rules, never answer them from memory.
 
     Topics:

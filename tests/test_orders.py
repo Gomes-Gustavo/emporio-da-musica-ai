@@ -30,6 +30,7 @@ def test_delivered_order_shows_status_tracking_and_days_since_delivery():
             "items": [{"product": "Martin D-28 Dreadnought Natural", "quantity": 1}],
             "tracking_code": "BRAB1234567BR",
             "estimated_delivery": "2025-10-25",
+            "days_since_order": 158,  # the defect exchange window (manual 4.2) counts from the purchase
             "days_since_estimated_delivery": 148,  # computed in code against the frozen date
             "notes": None,
         }
