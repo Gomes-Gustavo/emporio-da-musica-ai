@@ -1,10 +1,8 @@
 """The customer service agent: a persona prompt plus the store tools, driven by Gemini function calling."""
 
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
@@ -93,7 +91,7 @@ def build_system_prompt(now: datetime) -> str:
     return SYSTEM_PROMPT.format(weekday=WEEKDAYS[now.weekday()], now=now)
 
 
-def make_chat(client: genai.Client, now: datetime | None = None):
+def make_chat(client: genai.Client, now: datetime | None = None, history: list[types.Content] | None = None):
     """A chat session: Gemini calls the tools by itself and the history lives in the session.
 
     The caller keeps `client` alive for as long as it chats: the chat does not hold it, and the SDK
@@ -103,16 +101,17 @@ def make_chat(client: genai.Client, now: datetime | None = None):
         system_instruction=build_system_prompt(now or datetime.now(STORE_TIMEZONE)),
         tools=TOOLS,  # Python functions: the SDK builds their schemas and runs them for us
     )
-    return client.chats.create(model=os.getenv("GEMINI_MODEL", DEFAULT_MODEL), config=config)
+    return client.chats.create(model=os.getenv("GEMINI_MODEL", DEFAULT_MODEL), config=config, history=history)
 
 
-def reply(chat, message: str) -> str:
-    return chat.send_message(message).text or ""
-
-
-if __name__ == "__main__":
-    load_dotenv()
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
-        sys.exit("Set GEMINI_API_KEY in a .env file or in the environment.")
-    client = genai.Client()
-    print(reply(make_chat(client), " ".join(sys.argv[1:]) or "Olá!"))
+def reply(chat, message: str) -> tuple[str, list[str]]:
+    """The agent's answer and the tool calls it made to get there, e.g. "get_policy(topic='hours')"."""
+    seen = len(chat.get_history())
+    text = chat.send_message(message).text or ""
+    calls = [
+        f"{part.function_call.name}({', '.join(f'{k}={v!r}' for k, v in (part.function_call.args or {}).items())})"
+        for content in chat.get_history()[seen:]  # only this turn: the history keeps the earlier ones
+        for part in content.parts or []
+        if part.function_call
+    ]
+    return text, calls
